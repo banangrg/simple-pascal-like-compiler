@@ -24,4 +24,4 @@ symbol.o : symbol.c global.h
 
 .PHONY : clean
 clean :
-	rm main.o init.o parser.o lexer.o emitter.o error.o symbol.o
+	rm comp main.o init.o parser.o lexer.o emitter.o error.o symbol.o
