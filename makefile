@@ -1,5 +1,5 @@
 comp : main.o init.o parser.o lexer.o emitter.o error.o symbol.o
-	gcc -o comp main.o init.o parser.o lexer.o emitter.o error.o symbol.o
+	gcc -o comp main.o init.o parser.o lexer.o emitter.o error.o symbol.o -lfl
 
 main.o : main.c global.h
 	gcc -c main.c
@@ -11,7 +11,10 @@ parser.o : parser.c global.h
 	gcc -c parser.c
 
 lexer.o : lexer.c global.h
-	gcc -c lexer.c
+	gcc -c -o lexer.o lexer.c
+
+lexer.c : lexer.l global.h
+	flex -o lexer.c lexer.l
 
 emitter.o : emitter.c global.h
 	gcc -c emitter.c
@@ -24,4 +27,4 @@ symbol.o : symbol.c global.h
 
 .PHONY : clean
 clean :
-	rm comp main.o init.o parser.o lexer.o emitter.o error.o symbol.o
+	@rm comp main.o init.o parser.o lexer.o lexer.c emitter.o error.o symbol.o
