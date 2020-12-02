@@ -1,6 +1,7 @@
 %{
 	/* definitions of manifest constants */
 	#include "global.h"
+	#include "parser.h"
 	char lexbuf[BSIZE];
 	int lineno = 1;
 	int tokenval = NONE;
@@ -37,18 +38,18 @@ int install_id() {
 	{
 		pos = insert (yytext, ID);
 	}
-	tokenval = pos;
+	yylval = pos;
 	return symtable[pos].token;
 }
 
 int install_num() {
 	/* similar procedure to install a lexeme that is a number */
-	sscanf(yytext, "%d", &tokenval);
+	sscanf(yytext, "%d", &yylval);
 	return NUM;
 }
 
 int everything_else() {
-	tokenval = NONE;
+	yylval = NONE;
 	return yytext[0];
 }
 

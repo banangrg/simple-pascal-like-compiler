@@ -2,6 +2,6 @@
 
 void error(char *m)
 {
-  fprintf(stderr, "line%d:%s\n", lineno, m);
-  exit(1);
+	fprintf(stderr, "line%d:%s\n", lineno, m);
+	exit(1);
 }
