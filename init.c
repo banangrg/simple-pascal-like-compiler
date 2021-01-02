@@ -1,9 +1,24 @@
 #include "global.h"
 #include "parser.h"
 
+/*consider storing keywords here like div mod and or etc with specific*/
 struct entry keywords[] = {
-	{"div", DIV},
-	{"mod", MOD},
+	{":=", ASSIGNOP},
+	{"<>", RELOP},
+	{"<=", RELOP},
+	{">=", RELOP},
+	{"<", RELOP},
+	{">", RELOP},
+	{"=", RELOP},
+	{"div", MULOP},
+	{"mod", MULOP},
+	{"*", MULOP},
+	{"/", MULOP},
+	{"and", MULOP},
+	{"+", SIGN},
+	{"-", SIGN},
+	{"or", OR},
+	{"not", NOT},
 	{0, 0}};
 void init()
 {

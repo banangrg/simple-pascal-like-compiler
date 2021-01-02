@@ -6,17 +6,23 @@ void emit(int t, int tval)
 	char t_c = (char) t;
 	switch (t)
 	{
-		case '+':
-		case '-':
-		case '*':
-		case '/':
-			printf("%c\n", t);
+		case ASSIGNOP:
+			printf("ASSIGNOP\n");
 			break;
-		case DIV:
-			printf("DIV\n");
+		case RELOP:
+			printf("RELOP\n");
 			break;
-		case MOD:
-			printf("MOD\n");
+		case SIGN:
+			printf("SIGN\n");
+			break;
+		case MULOP:
+			printf("MULOP\n");
+			break;
+		case OR:
+			printf("OR\n");
+			break;
+		case NOT:
+			printf("NOT\n");
 			break;
 		case NUM:
 			printf("%d\n", tval);
