@@ -1,5 +1,5 @@
 #include "global.h"
-#include "parser.h"
+#include "parser.hpp"
 
 int main()
 {

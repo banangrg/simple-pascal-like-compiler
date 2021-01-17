@@ -1,7 +1,7 @@
 %{
 	/* definitions of manifest constants */
 	#include "global.h"
-	#include "parser.h"
+	#include "parser.hpp"
 	char lexbuf[BSIZE];
 	int lineno = 1;
 	int tokenval = NONE;
@@ -10,6 +10,8 @@
 	int install_num();
 	int everything_else();
 %}
+
+%option noyywrap
 
 /* regular definitions, consider e notation for number */
 delim       [ \t]
@@ -23,6 +25,16 @@ relop		<>|<=|>=|=|<|>
 %%
 \n          	{lineno++;}
 {ws}        	{/* no action and no return */}
+":="			{return ASSIGNOP;}
+{relop}			{return RELOP;}
+"+"				{return SIGN;}
+"-"				{return SIGN;}
+"*"				{return MULOP;}
+"/"				{return MULOP;}
+(div)			{return MULOP;}
+(mod)			{return MULOP;}
+(and)			{return MULOP;}
+(or)			{return OR;}
 (program)		{return KW_PROGRAM;}
 (var)			{return KW_VAR;}
 (array)			{return KW_ARRAY;}
@@ -38,25 +50,10 @@ relop		<>|<=|>=|=|<|>
 (do)			{return KW_DO;}
 (integer)		{return T_INTEGER;}
 (real)			{return T_REAL;}
-":="			{printf("ASSIGNOP\n"); return ASSIGNOP;}
-"<>"			{printf("RELOP <>\n"); return RELOP;}
-"<="			{printf("RELOP <=\n"); return RELOP;}
-">="			{printf("RELOP >=\n"); return RELOP;}
-"<"				{printf("RELOP <\n"); return RELOP;}
-">"				{printf("RELOP >\n"); return RELOP;}
-"="				{printf("RELOP =\n"); return RELOP;}
-"+"				{printf("SIGN +\n"); return SIGN;}
-"-"				{printf("SIGN -\n"); return SIGN;}
-"*"				{printf("MULOP *\n"); return MULOP;}
-"/"				{printf("MULOP *\n"); return MULOP;}
-(div)			{printf("MULOP DIV\n"); return MULOP;}
-(mod)			{printf("MULOP MOD\n"); return MULOP;}
-(and)			{printf("MULOP AND\n"); return MULOP;}
-(or)			{printf("OR\n"); return OR;}
-{id}        	{printf("ID = %s\n",yytext); return install_id();}
-{number}    	{printf("NUM\n"); return install_num();}
+{id}        	{return install_id();}
+{number}    	{return install_num();}
 <<EOF>>			{return DONE;}
-.				{ return everything_else(); }
+.				{return everything_else();}
 %%
 
 int install_id() {
@@ -74,7 +71,15 @@ int install_id() {
 
 int install_num() {
 	/* similar procedure to install a lexeme that is a number */
-	sscanf(yytext, "%d", &yylval);
+	int pos = lookup (yytext);
+	if (pos == 0) 
+	{
+		pos = insert (yytext, NUM);
+		symtable[pos].type = entry_type::NUMBER;
+		symtable[pos].dtype = data_type::INTEGER;//temp
+		symtable[pos].value = atoi(yytext);
+	}
+	yylval = pos;
 	return NUM;
 }
 

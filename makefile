@@ -1,36 +1,36 @@
 comp : main.o init.o parser.o lexer.o emitter.o error.o symbol.o
-	gcc -o comp main.o init.o parser.o lexer.o emitter.o error.o symbol.o -lfl
+	g++ -o comp main.o init.o parser.o lexer.o emitter.o error.o symbol.o -lfl
 
-main.o : main.c global.h parser.h
-	gcc -c main.c
+main.o : main.cpp global.h parser.hpp
+	g++ -c main.cpp
 
-init.o : init.c global.h parser.h
-	gcc -c init.c
+init.o : init.cpp global.h parser.hpp
+	g++ -c init.cpp
 
 # parser.o : parser_old.c global.h
-# 	gcc -c -o parser.o parser_old.c
+# 	g++ -c -o parser.o parser_old.c
 
-parser.o : parser.c global.h parser.h
-	gcc -c -o parser.o parser.c
+parser.o : parser.cpp global.h parser.hpp
+	g++ -c -o parser.o parser.cpp
 
-parser.c parser.h: parser.y
-	bison -d -o parser.c parser.y
+parser.cpp parser.hpp: parser.y
+	bison -d -o parser.cpp parser.y
 
-lexer.o : lexer.c global.h parser.h
-	gcc -c -o lexer.o lexer.c
+lexer.o : lexer.cpp global.h parser.hpp
+	g++ -c -o lexer.o lexer.cpp
 
-lexer.c : lexer.l
-	flex -o lexer.c lexer.l
+lexer.cpp : lexer.l
+	flex -o lexer.cpp lexer.l
 
-emitter.o : emitter.c global.h parser.h
-	gcc -c emitter.c
+emitter.o : emitter.cpp global.h parser.hpp
+	g++ -c emitter.cpp
 
-error.o : error.c global.h
-	gcc -c error.c
+error.o : error.cpp global.h
+	g++ -c error.cpp
 
-symbol.o : symbol.c global.h
-	gcc -c symbol.c
+symbol.o : symbol.cpp global.h
+	g++ -c symbol.cpp
 
 .PHONY : clean
 clean :
-	@rm comp main.o init.o parser.o parser.c parser.h lexer.o lexer.c emitter.o error.o symbol.o
+	@rm comp main.o init.o parser.o parser.cpp parser.hpp lexer.o lexer.cpp emitter.o error.o symbol.o
