@@ -7,7 +7,7 @@
 	int tokenval = NONE;
 
 	int install_id();
-	int install_num();
+	int install_num(data_type dtype);
 	int everything_else();
 %}
 
@@ -19,21 +19,22 @@ ws          {delim}+
 letter      [A-Za-z]
 digit       [0-9]
 id          {letter}({letter}|{digit})*
-number      {digit}+([.]{digit}+)?
+number      {digit}+
+fnumber     {digit}+([.]{digit}+)?
 relop		<>|<=|>=|=|<|>
 
 %%
 \n          	{lineno++;}
 {ws}        	{/* no action and no return */}
 ":="			{return ASSIGNOP;}
-{relop}			{return RELOP;}
-"+"				{return SIGN;}
-"-"				{return SIGN;}
-"*"				{return MULOP;}
-"/"				{return MULOP;}
-(div)			{return MULOP;}
-(mod)			{return MULOP;}
-(and)			{return MULOP;}
+{relop}			{yylval = lookup_op(string(yytext)); return RELOP;}
+"+"				{yylval = lookup_op(string(yytext)); return SIGN;}
+"-"				{yylval = lookup_op(string(yytext)); return SIGN;}
+"*"				{yylval = lookup_op(string(yytext)); return MULOP;}
+"/"				{yylval = lookup_op(string(yytext)); return MULOP;}
+(div)			{yylval = lookup_op(string(yytext)); return MULOP;}
+(mod)			{yylval = lookup_op(string(yytext)); return MULOP;}
+(and)			{yylval = lookup_op(string(yytext)); return MULOP;}
 (or)			{return OR;}
 (program)		{return KW_PROGRAM;}
 (var)			{return KW_VAR;}
@@ -51,7 +52,8 @@ relop		<>|<=|>=|=|<|>
 (integer)		{return T_INTEGER;}
 (real)			{return T_REAL;}
 {id}        	{return install_id();}
-{number}    	{return install_num();}
+{number}    	{return install_num(data_type::INTEGER);}
+{fnumber}    	{return install_num(data_type::REAL);}
 <<EOF>>			{return DONE;}
 .				{return everything_else();}
 %%
@@ -69,15 +71,14 @@ int install_id() {
 	return symtable[pos].token;
 }
 
-int install_num() {
+int install_num(data_type dtype) {
 	/* similar procedure to install a lexeme that is a number */
 	int pos = lookup (yytext);
 	if (pos == 0) 
 	{
 		pos = insert (yytext, NUM);
 		symtable[pos].type = entry_type::NUMBER;
-		symtable[pos].dtype = data_type::INTEGER;//temp
-		symtable[pos].value = atoi(yytext);
+		symtable[pos].dtype = dtype;
 	}
 	yylval = pos;
 	return NUM;

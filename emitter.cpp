@@ -1,7 +1,13 @@
 #include "global.h"
 #include "parser.hpp"
 #include <list>
+#include <set>
+
 using std::list;
+using std::set;
+
+set<string> jumpset { "jump", "jne", "jle", "jge", "je", "jg", "jl" };
+
 void proc_read_or_write(bool is_write, int arg_pos);
 
 void emit(int t, int tval)
@@ -73,7 +79,7 @@ void proc_read_or_write(bool is_write, int arg_pos)
 {
 	string procedure_name = (is_write) ? "write" : "read";
 	data_type dtype = symtable[arg_pos].dtype;
-	bool is_num_type = (symtable[arg_pos].type == entry_type::NUMBER) ? true : false; // TODO: maybe without true false? will it work?
+	bool is_num_type = (symtable[arg_pos].type == entry_type::NUMBER);
 
 	if (dtype == data_type::INTEGER)
 	{
@@ -103,14 +109,19 @@ void proc_read_or_write(bool is_write, int arg_pos)
 	}
 }
 
+void print_label(int label_pos)
+{
+	cout<<symtable[label_pos].name + ":"<<endl;
+}
+
 void gencode(string mnem, int argcount, int arg1_pos, int arg2_pos, int arg3_pos)
 {
 	string command = mnem;
 	bool uses_real = false;
 	list<int> sym_idx_list = {arg1_pos, arg2_pos, arg3_pos};
-
 	if (argcount > 0)
 	{
+		//TODO: make getType func
 		if (symtable[arg1_pos].dtype == data_type::REAL)
 		{
 			command += ".r ";
@@ -120,14 +131,16 @@ void gencode(string mnem, int argcount, int arg1_pos, int arg2_pos, int arg3_pos
 			command += ".i ";
 		}
 	}
-
 	int i = 0;
-	for (list<int>::iterator it = sym_idx_list.begin(); (i < argcount) || (it != sym_idx_list.end()); it++)
+	for (list<int>::iterator it = sym_idx_list.begin(); (i < argcount) && (it != sym_idx_list.end()); it++)
 	{
 		int arg_pos = *it;
-		if (symtable[arg_pos].type == entry_type::NUMBER)
+		if ( 
+				symtable[arg_pos].type == entry_type::NUMBER ||
+				( (i == argcount - 1) && jumpset.find(mnem) != jumpset.end() )
+			)//find is similar to 'contains'
 		{
-			command += "#" + std::to_string(symtable[arg_pos].value) + ",";
+			command += "#" + symtable[arg_pos].name + ",";
 		}
 		else if (symtable[arg_pos].type == entry_type::VARIABLE)
 		{
@@ -139,8 +152,7 @@ void gencode(string mnem, int argcount, int arg1_pos, int arg2_pos, int arg3_pos
 		}
 		i++;
 	}
-
-	if (argcount > 0)
+	if (argcount > 1)
 	{
 		command = command.substr(0, command.length() - 1);
 	}
