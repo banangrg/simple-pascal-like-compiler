@@ -6,7 +6,7 @@
 using std::list;
 using std::set;
 
-set<string> jumpset { "jump", "jne", "jle", "jge", "je", "jg", "jl" };
+set<string> jumpset { "jump", "jne", "jle", "jge", "jeq", "jg", "jl" };
 
 void proc_read_or_write(bool is_write, int arg_pos);
 

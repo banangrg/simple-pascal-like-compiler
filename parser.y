@@ -139,7 +139,19 @@ statement : variable ASSIGNOP expression {
 	} KW_ELSE statement {
 		print_label($4);
 	}
-	| KW_WHILE expression KW_DO statement
+	| KW_WHILE {
+		int loop_start_pos = insert_label();
+		print_label(loop_start_pos);
+		$1 = loop_start_pos;
+	} expression {
+		int after_loop_pos = insert_label();
+		int zero_pos = get_number(string("0"), data_type::INTEGER);//TODO: consider promotion then selection of data type
+		gencode(string("jeq"), 3, zero_pos, $3, after_loop_pos);
+		$2 = after_loop_pos;
+	} KW_DO statement {
+		gencode(string("jump"), 1, $1);
+		print_label($2);
+	}
 	;
 
 variable : ID { /* printf("F variable1\n "); */ }
@@ -268,7 +280,10 @@ factor : variable { /* cout<<"VAR $1 ADDR OF "<<$1<<"="<<symtable[$1].value<<end
 		$$ = $2;
 	}
 	| NOT factor {
-		//TODO: new temp, use not
+		int negated_pos = insert_tempvar();
+		allocate(negated_pos, data_type::INTEGER);
+		gencode(string("not"), 2, $2, negated_pos);
+		$$ = negated_pos;
 	}
 	;
 

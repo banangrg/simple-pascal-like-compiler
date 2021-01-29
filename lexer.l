@@ -36,6 +36,7 @@ relop		<>|<=|>=|=|<|>
 (mod)			{yylval = lookup_op(string(yytext)); return MULOP;}
 (and)			{yylval = lookup_op(string(yytext)); return MULOP;}
 (or)			{return OR;}
+(not)			{return NOT;}
 (program)		{return KW_PROGRAM;}
 (var)			{return KW_VAR;}
 (array)			{return KW_ARRAY;}
