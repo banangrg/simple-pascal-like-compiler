@@ -8,7 +8,6 @@ using std::set;
 
 set<string> jumpset { "jump", "jne", "jle", "jge", "jeq", "jg", "jl" };
 
-void proc_read_or_write(bool is_write, int arg_pos);
 
 void emit(int t, int tval)
 {
@@ -54,12 +53,12 @@ void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 		if (write_func_pos == fn_or_proc_pos)
 		{
 			int write_arg_pos = *arg_list.begin();
-			proc_read_or_write(true, write_arg_pos);
+			gencode(string("write"), 1 , write_arg_pos);
 		}
 		else if (read_func_pos == fn_or_proc_pos)
 		{
 			int read_arg_pos = *arg_list.begin();
-			proc_read_or_write(false, read_arg_pos);
+			gencode(string("read"), 1 ,read_arg_pos);
 		}
 		else
 		{
@@ -72,40 +71,6 @@ void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 	else
 	{
 		//error;
-	}
-}
-
-void proc_read_or_write(bool is_write, int arg_pos)
-{
-	string procedure_name = (is_write) ? "write" : "read";
-	data_type dtype = symtable[arg_pos].dtype;
-	bool is_num_type = (symtable[arg_pos].type == entry_type::NUMBER);
-
-	if (dtype == data_type::INTEGER)
-	{
-		if (is_num_type)
-		{
-			cout << procedure_name << ".i #" << symtable[arg_pos].value << endl;
-		}
-		else
-		{
-			cout << procedure_name << ".i " << symtable[arg_pos].offset << endl;
-		}
-	}
-	else if (dtype == data_type::REAL)
-	{
-		if (is_num_type)
-		{
-			cout << procedure_name << ".r #" << symtable[arg_pos].value << endl;
-		}
-		else
-		{
-			cout << procedure_name << ".r " << symtable[arg_pos].offset << endl;
-		}
-	}
-	else
-	{
-		//error
 	}
 }
 
@@ -152,7 +117,7 @@ void gencode(string mnem, int argcount, int arg1_pos, int arg2_pos, int arg3_pos
 		}
 		i++;
 	}
-	if (argcount > 1)
+	if (argcount > 0)
 	{
 		command = command.substr(0, command.length() - 1);
 	}
