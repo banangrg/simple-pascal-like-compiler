@@ -3,6 +3,9 @@
 
 	void yyerror(char const *s);
 
+	data_type temp_data_type;
+	array_info temp_array_info;
+
 	list<int> list_of_ids;
 	list<int> list_of_params;
 	list<int> list_of_expressions;
@@ -36,7 +39,7 @@
 
 %token T_REAL
 %token T_INTEGER
-
+%token T_ARRAY
 %%
 
 program : KW_PROGRAM ID '(' identifier_list ')' ';' { 
@@ -44,14 +47,14 @@ program : KW_PROGRAM ID '(' identifier_list ')' ';' {
 		list_of_ids.clear(); 
 	}
 	declarations {
-		gencode("jump", 1, $2);
+		gencode("jump", $2);
 	}
 	subprogram_declarations {
 		print_label($2);
 	}
 	compound_statement
 	'.' { 
-			gencode(string("exit"), 0);
+			gencode(string("exit"));
 			dump();
 		}
 	;
@@ -60,10 +63,13 @@ identifier_list : ID { list_of_ids.emplace_back($1); }
 	;
 
 declarations : declarations KW_VAR identifier_list ':' type ';' {
+		entry_type etype = ( $5 == T_ARRAY ) ? entry_type::ARRAY : entry_type::VARIABLE;
+		data_type dtype = ( $5 == T_ARRAY ) ? temp_data_type : static_cast<data_type>($5);
+
 		for (list<int>::iterator it = list_of_ids.begin(); it != list_of_ids.end(); ++it)
 		{
-			data_type dtype = static_cast<data_type>($5);
-			symtable[*it].type = entry_type::VARIABLE;
+			symtable[*it].type = etype;
+			symtable[*it].ainfo = temp_array_info;
 			allocate(*it, dtype);
 		}
 		list_of_ids.clear();
@@ -71,8 +77,17 @@ declarations : declarations KW_VAR identifier_list ':' type ';' {
 	| %empty
 	;
 
-type : standard_type
-	| KW_ARRAY '[' NUM '.''.' NUM ']' KW_OF standard_type { /*array as type, dtype as inner info*/ }
+type : standard_type {
+		temp_array_info = {};
+	}
+	| KW_ARRAY '[' NUM '.''.' NUM ']' KW_OF standard_type { 
+		//TODO: error if not integer index or idx < 0;
+		temp_data_type = static_cast<data_type>($9);
+		temp_array_info.start_index = atoi(symtable[$3].name.c_str());
+		temp_array_info.end_index = atoi(symtable[$6].name.c_str());
+		temp_array_info.size = temp_array_info.end_index - temp_array_info.start_index;
+		$$ = T_ARRAY;
+	 }
 	;
 
 standard_type : T_INTEGER { $$ = static_cast<int>(data_type::INTEGER); }
@@ -94,7 +109,7 @@ subprogram_head : KW_FUNCTION ID arguments ':' standard_type ';' {
 		print_label($2);
 		symtable[$2].type = entry_type::PROCEDURE;
 		vector<entry> newtable;
-		symtable[$2].inner_table = &newtable;
+		//symtable[$2].inner_table = &newtable;
 	}
 	;
 
@@ -122,18 +137,18 @@ statement_list : { /* printf("S stmt_list1\n "); */ } statement { /* printf("F s
 
 statement : variable ASSIGNOP expression { 
 		int pos = promote_assign(symtable[$1].dtype, $3);
-		gencode(string("mov"), 2, $3, $1);
+		gencode(string("mov"), $3, $1);
 	}
 	| procedure_statement
 	| compound_statement
 	| KW_IF expression {
 		int zero_pos = get_number(string("0"), data_type::INTEGER);
 		int else_pos = insert_label();
-		gencode(string("jne"), 3, zero_pos, $2, else_pos);
+		gencode(string("jne"), zero_pos, $2, else_pos);
 		$1 = else_pos;
 	} KW_THEN statement {
 		int endif_pos = insert_label();
-		gencode(string("jump"), 1, endif_pos);
+		gencode(string("jump"), endif_pos);
 		print_label($1);
 		$4 = endif_pos;
 	} KW_ELSE statement {
@@ -146,16 +161,42 @@ statement : variable ASSIGNOP expression {
 	} expression {
 		int after_loop_pos = insert_label();
 		int zero_pos = get_number(string("0"), data_type::INTEGER);//TODO: consider promotion then selection of data type
-		gencode(string("jeq"), 3, zero_pos, $3, after_loop_pos);
+		gencode(string("jeq"), zero_pos, $3, after_loop_pos);
 		$2 = after_loop_pos;
 	} KW_DO statement {
-		gencode(string("jump"), 1, $1);
+		gencode(string("jump"), $1);
 		print_label($2);
 	}
 	;
 
 variable : ID { /* printf("F variable1\n "); */ }
-	| ID '[' expression ']' { /* printf("F variable2\n "); */ }
+	| ID '[' expression ']' {
+		if (symtable[$3].dtype != data_type::INTEGER)
+		{
+			//error, only integer indices
+			// plus not an array error etc.
+		}
+		int start_index_pos = get_number(to_string(symtable[$1].ainfo.start_index), data_type::INTEGER);
+		int array_index_pos = insert_tempvar();
+		allocate(array_index_pos, data_type::INTEGER);
+		gencode(string("sub"), $3, start_index_pos, array_index_pos);
+
+		int address_multiplier_pos;
+		if (symtable[$1].dtype == data_type::INTEGER)
+		{
+			address_multiplier_pos = get_number(string("4"), data_type::INTEGER);
+		}
+		else
+		{
+			address_multiplier_pos = get_number(string("8"), data_type::INTEGER);
+		}
+		gencode(string("mul"), array_index_pos, address_multiplier_pos, array_index_pos);
+
+		int arr_el_ptr_pos = insert_tempvar(); 
+		allocate(arr_el_ptr_pos, symtable[$1].dtype, true);
+		gencode(string("add"), array_index_pos, $1, arr_el_ptr_pos, false, true, true);
+	 	$$ = arr_el_ptr_pos;
+	 }
 	;
 
 procedure_statement : ID { /* printf("F proc_stmt1\n "); */ }
@@ -191,14 +232,14 @@ expression : simple_expression
 		allocate(relop_out_pos, data_type::INTEGER);
 
 		int one_pos = get_number(string("1"), data_type::INTEGER);
-		gencode(string("mov"), 2, one_pos, relop_out_pos);
+		gencode(string("mov"), one_pos, relop_out_pos);
 
 		int skip_false_pos = insert_label();
 		tuple<int,int> operands_pos = promote($1, $3);
-		gencode(command, 3, std::get<0>(operands_pos), std::get<1>(operands_pos), skip_false_pos);
+		gencode(command, std::get<0>(operands_pos), std::get<1>(operands_pos), skip_false_pos);
 
 		int zero_pos = get_number(string("0"), data_type::INTEGER);
-		gencode(string("mov"), 2, zero_pos, relop_out_pos);
+		gencode(string("mov"), zero_pos, relop_out_pos);
 		print_label(skip_false_pos);
 		$$ = relop_out_pos;
 	}
@@ -217,7 +258,7 @@ simple_expression : term
 			}
 			int zero_pos = get_number(zero_number_name, symtable[$2].dtype);
 			symtable[zero_pos].dtype = symtable[$2].dtype;
-			gencode(string("sub"), 2, zero_pos, $2);
+			gencode(string("sub"), zero_pos, $2);
 		}
 	}
 	| simple_expression SIGN term { 
@@ -233,14 +274,14 @@ simple_expression : term
 			default: command = "sub";
 		}
 
-		gencode(command, 3, std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
+		gencode(command, std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
 		$$ = temp_pos;
 	}
 	| simple_expression OR term {
 		tuple<int,int> operands_pos = promote($1, $3);
 		int temp_pos = insert_tempvar();
 		allocate(temp_pos, data_type::INTEGER);//TODO: consider if 'or' result will be always int?
-		gencode("or", 3, std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
+		gencode("or", std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
 		$$ = temp_pos;
 	}
 	;
@@ -268,7 +309,7 @@ term : factor
 		int temp_pos = insert_tempvar();
 		allocate(temp_pos, op_result_dtype);
 
-		gencode(command, 3, std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
+		gencode(command, std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
 		$$ = temp_pos;
 	}
 	;
@@ -282,7 +323,7 @@ factor : variable { /* cout<<"VAR $1 ADDR OF "<<$1<<"="<<symtable[$1].value<<end
 	| NOT factor {
 		int negated_pos = insert_tempvar();
 		allocate(negated_pos, data_type::INTEGER);
-		gencode(string("not"), 2, $2, negated_pos);
+		gencode(string("not"), $2, negated_pos);
 		$$ = negated_pos;
 	}
 	;

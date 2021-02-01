@@ -6,8 +6,7 @@
 using std::list;
 using std::set;
 
-set<string> jumpset { "jump", "jne", "jle", "jge", "jeq", "jg", "jl" };
-
+set<string> jumpset{"jump", "jne", "jle", "jge", "jeq", "jg", "jl"};
 
 void emit(int t, int tval)
 {
@@ -53,16 +52,16 @@ void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 		if (write_func_pos == fn_or_proc_pos)
 		{
 			int write_arg_pos = *arg_list.begin();
-			gencode(string("write"), 1 , write_arg_pos);
+			gencode(string("write"), write_arg_pos);
 		}
 		else if (read_func_pos == fn_or_proc_pos)
 		{
 			int read_arg_pos = *arg_list.begin();
-			gencode(string("read"), 1 ,read_arg_pos);
+			gencode(string("read"), read_arg_pos);
 		}
 		else
 		{
-			//other procedure
+			//TODO:other procedure
 		}
 	}
 	else if (symtable[fn_or_proc_pos].type == entry_type::FUNCTION)
@@ -70,56 +69,74 @@ void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 	}
 	else
 	{
-		//error;
+		//TODO:error;
 	}
 }
 
 void print_label(int label_pos)
 {
-	cout<<symtable[label_pos].name + ":"<<endl;
+	cout << symtable[label_pos].name + ":" << endl;
 }
 
-void gencode(string mnem, int argcount, int arg1_pos, int arg2_pos, int arg3_pos)
+string print_symbol_content(int arg_pos, bool use_ref)
 {
-	string command = mnem;
-	bool uses_real = false;
-	list<int> sym_idx_list = {arg1_pos, arg2_pos, arg3_pos};
+	if (
+			symtable[arg_pos].type == entry_type::NUMBER || symtable[arg_pos].type == entry_type::LABEL
+		 	|| symtable[arg_pos].type == entry_type::PROGRAM_NAME
+		)
+	{
+		return "#" + symtable[arg_pos].name;
+	}
+	if (symtable[arg_pos].type == entry_type::VARIABLE || symtable[arg_pos].type == entry_type::ARRAY)
+	{
+		if (!symtable[arg_pos].is_pointer && use_ref)
+		{
+			return "#" + to_string(symtable[arg_pos].offset);
+		}
+		else if (symtable[arg_pos].is_pointer && !use_ref) 
+		{
+			return "*" + to_string(symtable[arg_pos].offset);
+		}
+		return to_string(symtable[arg_pos].offset);
+	}
+	//TODO:error
+	return "";
+}
+
+void gencode(string mnem, int arg1_pos, int arg2_pos, int arg3_pos, bool arg1_by_ref, bool arg2_by_ref, bool arg3_by_ref)
+{
+	string command = "";
+	int argcount = 0;
+	if (arg1_pos >= 0)
+	{
+		command += print_symbol_content(arg1_pos, arg1_by_ref) + ",";
+		argcount++;
+	}
+	if (arg2_pos >= 0)
+	{
+		command += print_symbol_content(arg2_pos, arg2_by_ref) + ",";
+		argcount++;
+	}
+	if (arg3_pos >= 0)
+	{
+		command += print_symbol_content(arg3_pos, arg3_by_ref) + ",";
+		argcount++;
+	}
+
 	if (argcount > 0)
 	{
-		//TODO: make getType func
 		if (symtable[arg1_pos].dtype == data_type::REAL)
 		{
-			command += ".r ";
+			command = mnem + ".r " + command.substr(0, command.length() - 1);
 		}
 		else
 		{
-			command += ".i ";
+			command = mnem + ".i " + command.substr(0, command.length() - 1);
 		}
 	}
-	int i = 0;
-	for (list<int>::iterator it = sym_idx_list.begin(); (i < argcount) && (it != sym_idx_list.end()); it++)
+	else
 	{
-		int arg_pos = *it;
-		if ( 
-				symtable[arg_pos].type == entry_type::NUMBER ||
-				( (i == argcount - 1) && jumpset.find(mnem) != jumpset.end() )
-			)//find is similar to 'contains'
-		{
-			command += "#" + symtable[arg_pos].name + ",";
-		}
-		else if (symtable[arg_pos].type == entry_type::VARIABLE)
-		{
-			command += std::to_string(symtable[arg_pos].offset) + ",";
-		}
-		else
-		{
-			//error('some error');
-		}
-		i++;
-	}
-	if (argcount > 0)
-	{
-		command = command.substr(0, command.length() - 1);
+		command = mnem;
 	}
 	cout << command << endl;
 }

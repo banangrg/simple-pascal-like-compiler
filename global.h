@@ -9,6 +9,7 @@
 #include <tuple>
 
 using std::string;
+using std::to_string;
 using std::cout;
 using std::endl;
 using std::list;
@@ -24,8 +25,15 @@ using std::tuple;
 // #define MOD 258
 // #define ID 259
 #define DONE 0
-enum class entry_type { UNDEFINED, VARIABLE, NUMBER, PROCEDURE, FUNCTION, PROGRAM_NAME, LABEL };
+enum class entry_type { UNDEFINED, NUMBER, VARIABLE, ARRAY, PROCEDURE, FUNCTION, PROGRAM_NAME, LABEL };
 enum class data_type { UNDEFINED, INTEGER, REAL };
+
+struct array_info
+{
+	int start_index;
+	int end_index;
+	int size;
+};
 
 struct entry
 {
@@ -34,8 +42,9 @@ struct entry
 	unsigned int offset;
 	entry_type type;
 	data_type dtype;
-	int value;
-	vector<entry> *inner_table;
+	bool is_pointer;
+	array_info ainfo;
+	//vector<entry> *inner_table;
 };
 
 struct op_entry
@@ -63,7 +72,7 @@ int lookup(string s);
 int lookup_op(string s);
 int get_number(string number_name, data_type dtype);
 
-void allocate(int pos, data_type dtype);
+void allocate(int pos, data_type dtype, bool is_pointer = false);
 void dump();
 void init();
 void parse();
@@ -75,5 +84,5 @@ void factor();
 void match(int t);
 void emit(int t, int tval);
 
-void gencode(string mnem, int argcount, int arg1_pos = -1, int arg2_pos = -1, int arg3_pos = -1);
+void gencode(string mnem, int arg1_pos = -1, int arg2_pos = -1, int arg3_pos = -1, bool arg1_by_ref = false, bool arg2_by_ref = false, bool arg3_by_ref = false);
 void print_label(int label_pos);
