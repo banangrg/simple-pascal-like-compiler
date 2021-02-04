@@ -8,14 +8,13 @@
 #include <list>
 #include <tuple>
 
-using std::string;
-using std::to_string;
 using std::cout;
 using std::endl;
 using std::list;
-using std::vector;
+using std::string;
+using std::to_string;
 using std::tuple;
-
+using std::vector;
 
 #define BSIZE 128
 #define NONE -1
@@ -25,8 +24,23 @@ using std::tuple;
 // #define MOD 258
 // #define ID 259
 #define DONE 0
-enum class entry_type { UNDEFINED, NUMBER, VARIABLE, ARRAY, PROCEDURE, FUNCTION, PROGRAM_NAME, LABEL };
-enum class data_type { UNDEFINED, INTEGER, REAL };
+enum class entry_type
+{
+	UNDEFINED,
+	NUMBER,
+	VARIABLE,
+	ARRAY,
+	PROCEDURE,
+	FUNCTION,
+	PROGRAM_NAME,
+	LABEL
+};
+enum class data_type
+{
+	UNDEFINED,
+	INTEGER,
+	REAL
+};
 
 struct array_info
 {
@@ -39,12 +53,12 @@ struct entry
 {
 	string name;
 	int token;
-	unsigned int offset;
+	int offset;
 	entry_type type;
 	data_type dtype;
 	bool is_pointer;
+	bool is_local;
 	array_info ainfo;
-	//vector<entry> *inner_table;
 };
 
 struct op_entry
@@ -56,16 +70,19 @@ struct op_entry
 
 extern int tokenval;
 extern int lineno;
+extern int callable_offset_top;
+extern bool code_buffering;
+extern string callable_output_buffer;
 extern vector<struct entry> symtable;
 extern vector<struct op_entry> optable;
 extern void emit_procedure(int fn_or_proc_pos, list<int> arg_list);
 
 int insert(string s, int tok);
-int insert_tempvar();
-int insert_label();
+int insert_tempvar(bool is_local = false);
+int insert_label(bool is_local = false);
 
-int promote_assign(data_type dtype, int right_arg_pos);
-tuple<int,int> promote(int left_arg_pos, int right_arg_pos);
+int promote_assign(data_type dtype, int right_arg_pos, bool is_local = false);
+tuple<int, int> promote(int left_arg_pos, int right_arg_pos, bool is_local = false);
 
 void error(string m);
 int lookup(string s);
@@ -73,7 +90,7 @@ int lookup_op(string s);
 int get_number(string number_name, data_type dtype);
 
 void allocate(int pos, data_type dtype, bool is_pointer = false);
-void dump();
+void dump(int lower_index = 0);
 void init();
 void parse();
 int yylex();

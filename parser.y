@@ -1,10 +1,15 @@
 %{
 	#include "global.h"
+	#include <cmath>
 
 	void yyerror(char const *s);
 
 	data_type temp_data_type;
 	array_info temp_array_info;
+	bool code_buffering = false;
+	string callable_output_buffer = "";
+	int symtable_pointer = -1;
+	int callable_offset_top = 0;
 
 	list<int> list_of_ids;
 	list<int> list_of_params;
@@ -54,9 +59,9 @@ program : KW_PROGRAM ID '(' identifier_list ')' ';' {
 	}
 	compound_statement
 	'.' { 
-			gencode(string("exit"));
-			dump();
-		}
+		gencode(string("exit"));
+		dump();
+	}
 	;
 identifier_list : ID { list_of_ids.emplace_back($1); }
 	| identifier_list ',' ID { list_of_ids.emplace_back($3); }
@@ -70,6 +75,7 @@ declarations : declarations KW_VAR identifier_list ':' type ';' {
 		{
 			symtable[*it].type = etype;
 			symtable[*it].ainfo = temp_array_info;
+			symtable[*it].is_local = ( symtable_pointer >= 0 );
 			allocate(*it, dtype);
 		}
 		list_of_ids.clear();
@@ -81,7 +87,7 @@ type : standard_type {
 		temp_array_info = {};
 	}
 	| KW_ARRAY '[' NUM '.''.' NUM ']' KW_OF standard_type { 
-		//TODO: error if not integer index or idx < 0;
+		//TODO: error if not integer index or idx < 0; another error is 2nd num is less than 1st one
 		temp_data_type = static_cast<data_type>($9);
 		temp_array_info.start_index = atoi(symtable[$3].name.c_str());
 		temp_array_info.end_index = atoi(symtable[$6].name.c_str());
@@ -98,28 +104,114 @@ subprogram_declarations : subprogram_declarations subprogram_declaration ';'
 	| %empty
 	;
 
-subprogram_declaration : subprogram_head declarations compound_statement
+subprogram_declaration : {
+		symtable_pointer = symtable.size();
+ 	} 
+ 	subprogram_head {
+		 code_buffering = true;
+	}
+	declarations
+	compound_statement {
+		code_buffering = false;
+
+		int enter_bytes = 0;
+		if (callable_offset_top < 0) 
+		{
+			enter_bytes = std::abs(callable_offset_top);
+		}
+		int enter_pos = get_number(to_string(enter_bytes), data_type::INTEGER);
+		gencode(string("enter"), enter_pos);
+		cout<<callable_output_buffer;//buffered statements from compound statement
+		gencode(string("leave"));
+		gencode(string("return"));
+
+		dump(symtable_pointer);
+		symtable.erase(symtable.begin() + symtable_pointer + 1, symtable.end());
+		symtable_pointer = -1;
+		callable_output_buffer = "";
+	}
 	;
 
-subprogram_head : KW_FUNCTION ID arguments ':' standard_type ';' {
-		print_label($2);
-		symtable[$2].type = entry_type::FUNCTION;
+subprogram_head : KW_FUNCTION {
+		callable_offset_top = 12;//oldBP at [0;4], retaddr at [4;8], fn_result_ptr at [12;16] regardless of type since its pointer
 	}
-	| KW_PROCEDURE ID arguments ';' {
-		print_label($2);
-		symtable[$2].type = entry_type::PROCEDURE;
-		vector<entry> newtable;
-		//symtable[$2].inner_table = &newtable;
+	ID arguments ':' standard_type ';' {
+		int return_pos = insert_tempvar(true);
+		symtable[return_pos].name = symtable[$3].name;
+		symtable[return_pos].is_local = true;
+		allocate(return_pos, static_cast<data_type>($6), true);
+
+		int retaddr_pos = insert_tempvar(true);
+		symtable[retaddr_pos].name = "retaddr";
+		symtable[retaddr_pos].is_local = true;
+		allocate(retaddr_pos, data_type::INTEGER, true);
+
+		int oldbp_pos = insert_tempvar(true);
+		symtable[oldbp_pos].name = "old BP";
+		symtable[oldbp_pos].is_local = true;
+		allocate(oldbp_pos, data_type::INTEGER, true);
+
+		print_label($3);
+		symtable[$3].type = entry_type::FUNCTION;
+		symtable[$3].dtype = static_cast<data_type>($6);
+	}
+	| KW_PROCEDURE {
+		callable_offset_top = 8;
+	}
+	ID arguments ';' {
+		int retaddr_pos = insert_tempvar(true);
+		symtable[retaddr_pos].name = string("retaddr");
+		symtable[retaddr_pos].is_local = true;
+		allocate(retaddr_pos, data_type::INTEGER, true);
+
+		int oldbp_pos = insert_tempvar(true);
+		symtable[oldbp_pos].name = string("old BP");
+		symtable[oldbp_pos].is_local = true;
+		allocate(oldbp_pos, data_type::INTEGER, true);
+		
+		print_label($3);
+		symtable[$3].type = entry_type::PROCEDURE;
 	}
 	;
 
-arguments : '(' parameter_list ')'
+arguments : '(' parameter_list ')' {
+		callable_offset_top += list_of_params.size() * 4;
+		for (list<int>::iterator it = list_of_params.begin(); it != list_of_params.end(); ++it)
+		{
+			allocate(*it, symtable[*it].dtype, true);
+		}
+	}
 	| %empty
 	;
 
-parameter_list : identifier_list ':' type
+parameter_list : identifier_list ':' type {
+		entry_type etype = ( $3 == T_ARRAY ) ? entry_type::ARRAY : entry_type::VARIABLE;
+		data_type dtype = ( $3 == T_ARRAY ) ? temp_data_type : static_cast<data_type>($3);
+
+		for (list<int>::iterator it = list_of_ids.begin(); it != list_of_ids.end(); ++it)
+		{
+			symtable[*it].is_local = true;
+			symtable[*it].type = etype;
+			symtable[*it].dtype = dtype;
+			symtable[*it].ainfo = temp_array_info;
+		}
+
+		list_of_params.splice(list_of_params.end(), list_of_ids);
+		list_of_ids.clear();
+	}
 	| parameter_list ';' identifier_list ':' type {
-		list_of_params = list<int>(list_of_ids.begin(), list_of_ids.end());
+		entry_type etype = ( $5 == T_ARRAY ) ? entry_type::ARRAY : entry_type::VARIABLE;
+		data_type dtype = ( $5 == T_ARRAY ) ? temp_data_type : static_cast<data_type>($5);
+
+		for (list<int>::iterator it = list_of_ids.begin(); it != list_of_ids.end(); ++it)
+		{
+			symtable[*it].is_local = true;
+			symtable[*it].type = etype;
+			symtable[*it].dtype = dtype;
+			symtable[*it].ainfo = temp_array_info;
+		}
+
+		list_of_params.splice(list_of_params.end(), list_of_ids);
 		list_of_ids.clear();
 	}
 	;
@@ -136,18 +228,18 @@ statement_list : { /* printf("S stmt_list1\n "); */ } statement { /* printf("F s
 	;
 
 statement : variable ASSIGNOP expression { 
-		int pos = promote_assign(symtable[$1].dtype, $3);
-		gencode(string("mov"), $3, $1);
+		int pos = promote_assign(symtable[$1].dtype, $3, symtable_pointer >= 0);
+		gencode(string("mov"), pos, $1);
 	}
 	| procedure_statement
 	| compound_statement
 	| KW_IF expression {
 		int zero_pos = get_number(string("0"), data_type::INTEGER);
-		int else_pos = insert_label();
+		int else_pos = insert_label(symtable_pointer >= 0);
 		gencode(string("jne"), zero_pos, $2, else_pos);
 		$1 = else_pos;
 	} KW_THEN statement {
-		int endif_pos = insert_label();
+		int endif_pos = insert_label(symtable_pointer >= 0);
 		gencode(string("jump"), endif_pos);
 		print_label($1);
 		$4 = endif_pos;
@@ -155,11 +247,11 @@ statement : variable ASSIGNOP expression {
 		print_label($4);
 	}
 	| KW_WHILE {
-		int loop_start_pos = insert_label();
+		int loop_start_pos = insert_label(symtable_pointer >= 0);
 		print_label(loop_start_pos);
 		$1 = loop_start_pos;
 	} expression {
-		int after_loop_pos = insert_label();
+		int after_loop_pos = insert_label(symtable_pointer >= 0);
 		int zero_pos = get_number(string("0"), data_type::INTEGER);//TODO: consider promotion then selection of data type
 		gencode(string("jeq"), zero_pos, $3, after_loop_pos);
 		$2 = after_loop_pos;
@@ -177,7 +269,7 @@ variable : ID { /* printf("F variable1\n "); */ }
 			// plus not an array error etc.
 		}
 		int start_index_pos = get_number(to_string(symtable[$1].ainfo.start_index), data_type::INTEGER);
-		int array_index_pos = insert_tempvar();
+		int array_index_pos = insert_tempvar(symtable_pointer >= 0);
 		allocate(array_index_pos, data_type::INTEGER);
 		gencode(string("sub"), $3, start_index_pos, array_index_pos);
 
@@ -192,15 +284,30 @@ variable : ID { /* printf("F variable1\n "); */ }
 		}
 		gencode(string("mul"), array_index_pos, address_multiplier_pos, array_index_pos);
 
-		int arr_el_ptr_pos = insert_tempvar(); 
+		int arr_el_ptr_pos = insert_tempvar(symtable_pointer >= 0); 
 		allocate(arr_el_ptr_pos, symtable[$1].dtype, true);
 		gencode(string("add"), array_index_pos, $1, arr_el_ptr_pos, false, true, true);
 	 	$$ = arr_el_ptr_pos;
 	 }
 	;
 
-procedure_statement : ID { /* printf("F proc_stmt1\n "); */ }
+procedure_statement : ID { 
+		if (symtable[$1].type == entry_type::FUNCTION )//TODO:probably not used, check write(func(a))
+		{
+			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
+			allocate(fn_result_pos, symtable[$1].dtype);
+			list_of_expressions.emplace_back(fn_result_pos);
+		}		
+		emit_procedure($1, list_of_expressions);
+		list_of_expressions.clear();
+ 	}
 	| ID '(' expression_list ')' { 
+		if (symtable[$1].type == entry_type::FUNCTION )//TODO:probably not used
+		{
+			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
+			allocate(fn_result_pos, symtable[$1].dtype);
+			list_of_expressions.emplace_back(fn_result_pos);
+		}		
 		emit_procedure($1, list_of_expressions);
 		list_of_expressions.clear();
 	}
@@ -228,14 +335,14 @@ expression : simple_expression
 			default: command = "jl";
 				break;
 		}
-		int relop_out_pos = insert_tempvar();
+		int relop_out_pos = insert_tempvar(symtable_pointer >= 0);
 		allocate(relop_out_pos, data_type::INTEGER);
 
 		int one_pos = get_number(string("1"), data_type::INTEGER);
 		gencode(string("mov"), one_pos, relop_out_pos);
 
 		int skip_false_pos = insert_label();
-		tuple<int,int> operands_pos = promote($1, $3);
+		tuple<int,int> operands_pos = promote($1, $3, symtable_pointer >= 0);
 		gencode(command, std::get<0>(operands_pos), std::get<1>(operands_pos), skip_false_pos);
 
 		int zero_pos = get_number(string("0"), data_type::INTEGER);
@@ -249,7 +356,7 @@ simple_expression : term
 	| SIGN term { 
 		if (optable[$1].name == "sub")
 		{
-			int temp_pos = insert_tempvar();
+			int temp_pos = insert_tempvar(symtable_pointer >= 0);
 			allocate(temp_pos, symtable[$2].dtype);
 			string zero_number_name = "0";
 			if (symtable[$2].dtype == data_type::REAL)
@@ -262,8 +369,8 @@ simple_expression : term
 		}
 	}
 	| simple_expression SIGN term { 
-		tuple<int,int> operands_pos = promote($1, $3);
-		int temp_pos = insert_tempvar();
+		tuple<int,int> operands_pos = promote($1, $3, symtable_pointer >= 0);
+		int temp_pos = insert_tempvar(symtable_pointer >= 0);
 		allocate(temp_pos, symtable[std::get<0>(operands_pos)].dtype);
 
 		string command;
@@ -278,9 +385,9 @@ simple_expression : term
 		$$ = temp_pos;
 	}
 	| simple_expression OR term {
-		tuple<int,int> operands_pos = promote($1, $3);
-		int temp_pos = insert_tempvar();
-		allocate(temp_pos, data_type::INTEGER);//TODO: consider if 'or' result will be always int?
+		tuple<int,int> operands_pos = promote($1, $3, symtable_pointer >= 0);
+		int temp_pos = insert_tempvar(symtable_pointer >= 0);
+		allocate(temp_pos, data_type::INTEGER);//TODO:convert to int operands
 		gencode("or", std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
 		$$ = temp_pos;
 	}
@@ -288,7 +395,7 @@ simple_expression : term
 	
 term : factor
 	| term MULOP factor {
-		tuple<int,int> operands_pos = promote($1, $3);
+		tuple<int,int> operands_pos = promote($1, $3, symtable_pointer >= 0);
 		data_type op_result_dtype = symtable[std::get<0>(operands_pos)].dtype;
 
 		string command;
@@ -296,17 +403,17 @@ term : factor
 		{
 			case 1: command = "mul";
 				break;
-			case 2: command = "div";//TODO: a real div being '/', so what about 'div' operator?
+			case 2: command = "div";
 				break;
-			case 3: command = "div";
+			case 3: command = "div";//TODO:conversion to int
 				break;
 			case 4: command = "mod";
 				break;
 			default: command = "and";
-				op_result_dtype = data_type::INTEGER;
+				op_result_dtype = data_type::INTEGER;//TODO:conversion to int
 		}
 
-		int temp_pos = insert_tempvar();
+		int temp_pos = insert_tempvar(symtable_pointer >= 0);
 		allocate(temp_pos, op_result_dtype);
 
 		gencode(command, std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
@@ -314,14 +421,39 @@ term : factor
 	}
 	;
 
-factor : variable { /* cout<<"VAR $1 ADDR OF "<<$1<<"="<<symtable[$1].value<<endl; */ }
-	| ID '(' expression_list ')'
-	| NUM { /* cout<<"NUM VALUE "<<symtable[$1].value<<endl; */ }
+factor : variable {
+		$$ = $1;//left to be explicit this time
+		if (symtable[$1].type == entry_type::FUNCTION)
+		{
+			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
+			allocate(fn_result_pos, symtable[$1].dtype);
+			list_of_expressions.emplace_back(fn_result_pos);
+			emit_procedure($1, list_of_expressions);
+			list_of_expressions.clear();
+			$$ = fn_result_pos;
+		}
+ 	}
+	| ID '(' expression_list ')' {
+		if (symtable[$1].type == entry_type::FUNCTION)
+		{
+			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
+			allocate(fn_result_pos, symtable[$1].dtype);
+			list_of_expressions.emplace_back(fn_result_pos);
+			emit_procedure($1, list_of_expressions);
+			list_of_expressions.clear();
+			$$ = fn_result_pos;
+		}
+		else
+		{
+			//TODO:error
+		}
+	}
+	| NUM
 	| '(' expression ')' {
 		$$ = $2;
 	}
 	| NOT factor {
-		int negated_pos = insert_tempvar();
+		int negated_pos = insert_tempvar(symtable_pointer >= 0);
 		allocate(negated_pos, data_type::INTEGER);
 		gencode(string("not"), $2, negated_pos);
 		$$ = negated_pos;

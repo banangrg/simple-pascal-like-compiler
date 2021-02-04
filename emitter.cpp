@@ -6,7 +6,7 @@
 using std::list;
 using std::set;
 
-set<string> jumpset{"jump", "jne", "jle", "jge", "jeq", "jg", "jl"};
+set<entry_type> labelable_set{entry_type::LABEL, entry_type::PROGRAM_NAME, entry_type::FUNCTION, entry_type::PROCEDURE};
 
 void emit(int t, int tval)
 {
@@ -44,28 +44,23 @@ void emit(int t, int tval)
 
 void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 {
-	if (symtable[fn_or_proc_pos].type == entry_type::PROCEDURE)
+	if (symtable[fn_or_proc_pos].type == entry_type::FUNCTION || symtable[fn_or_proc_pos].type == entry_type::PROCEDURE)
 	{
-		int write_func_pos = lookup(string("write"));
-		int read_func_pos = lookup(string("read"));
+		if ((symtable[fn_or_proc_pos].name == "write") || (symtable[fn_or_proc_pos].name == "read"))
+		{
+			int io_arg_pos = *arg_list.begin();
+			gencode(symtable[fn_or_proc_pos].name, io_arg_pos);
+			return;
+		}
 
-		if (write_func_pos == fn_or_proc_pos)
+		for (list<int>::iterator it = arg_list.begin(); it != arg_list.end(); ++it)
 		{
-			int write_arg_pos = *arg_list.begin();
-			gencode(string("write"), write_arg_pos);
+			gencode(string("push"), *it, -1, -1, true, false, false);
 		}
-		else if (read_func_pos == fn_or_proc_pos)
-		{
-			int read_arg_pos = *arg_list.begin();
-			gencode(string("read"), read_arg_pos);
-		}
-		else
-		{
-			//TODO:other procedure
-		}
-	}
-	else if (symtable[fn_or_proc_pos].type == entry_type::FUNCTION)
-	{
+		gencode(string("call"), fn_or_proc_pos);
+
+		int size_of_ptrs_pos = get_number(to_string(arg_list.size() * 4), data_type::INTEGER);
+		gencode(string("incsp"), size_of_ptrs_pos);
 	}
 	else
 	{
@@ -75,29 +70,35 @@ void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 
 void print_label(int label_pos)
 {
+	cout << endl; //TODO: for debugging reasons
 	cout << symtable[label_pos].name + ":" << endl;
 }
 
 string print_symbol_content(int arg_pos, bool use_ref)
 {
-	if (
-			symtable[arg_pos].type == entry_type::NUMBER || symtable[arg_pos].type == entry_type::LABEL
-		 	|| symtable[arg_pos].type == entry_type::PROGRAM_NAME
-		)
+	entry symbol = symtable[arg_pos];
+	if (symbol.type == entry_type::NUMBER || (labelable_set.find(symbol.type) != labelable_set.end()))
 	{
-		return "#" + symtable[arg_pos].name;
+		return "#" + symbol.name;
 	}
-	if (symtable[arg_pos].type == entry_type::VARIABLE || symtable[arg_pos].type == entry_type::ARRAY)
+	if (symbol.type == entry_type::VARIABLE || symbol.type == entry_type::ARRAY)
 	{
-		if (!symtable[arg_pos].is_pointer && use_ref)
+		string offset_prefix = "";
+		if (!symbol.is_pointer && use_ref)
 		{
-			return "#" + to_string(symtable[arg_pos].offset);
+			offset_prefix += "#";
 		}
-		else if (symtable[arg_pos].is_pointer && !use_ref) 
+		else if (symbol.is_pointer && !use_ref)
 		{
-			return "*" + to_string(symtable[arg_pos].offset);
+			offset_prefix += "*";
 		}
-		return to_string(symtable[arg_pos].offset);
+		if (symbol.is_local)
+		{
+			offset_prefix += "BP";
+			if (symbol.offset > 0)
+				offset_prefix += "+";
+		}
+		return offset_prefix + to_string(symbol.offset);
 	}
 	//TODO:error
 	return "";
@@ -125,18 +126,22 @@ void gencode(string mnem, int arg1_pos, int arg2_pos, int arg3_pos, bool arg1_by
 
 	if (argcount > 0)
 	{
-		if (symtable[arg1_pos].dtype == data_type::REAL)
+		if (symtable[arg1_pos].dtype == data_type::REAL && !arg1_by_ref && (labelable_set.find(symtable[arg1_pos].type) == labelable_set.end()))
 		{
-			command = mnem + ".r " + command.substr(0, command.length() - 1);
+			command = ".r " + command.substr(0, command.length() - 1);
 		}
 		else
 		{
-			command = mnem + ".i " + command.substr(0, command.length() - 1);
+			command = ".i " + command.substr(0, command.length() - 1);
 		}
+	}
+	command = mnem + command;
+	if (code_buffering)
+	{
+		callable_output_buffer += command + "\n";
 	}
 	else
 	{
-		command = mnem;
+		cout << command << endl;
 	}
-	cout << command << endl;
 }
