@@ -14,11 +14,13 @@ int lastcondition = 0;
 string decode_type(entry_type type);
 string decode_dtype(data_type dtype);
 
-int lookup(string s)
+int lookup(string s, bool find_function_only)
 {
 	for (int i = symtable.size() - 1; i > 0; i--)
-		if (s.compare(symtable.at(i).name) == 0)
+		if (s.compare(symtable.at(i).name) == 0) {
+			if ( (symtable[i].type != entry_type::FUNCTION) && find_function_only) continue;
 			return i;
+		}
 	return 0;
 }
 
@@ -160,7 +162,7 @@ int get_number(string number_name, data_type dtype)
 void dump(int lower_index)
 {
 	cout << endl;
-	if (lower_index > 0)
+	if (lower_index == 0)
 	{
 		cout << "SYMTABLE: (top = " << lastpos << ")" << endl;
 	}

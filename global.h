@@ -59,6 +59,7 @@ struct entry
 	bool is_pointer;
 	bool is_local;
 	array_info ainfo;
+	list<int> argtypes;
 };
 
 struct op_entry
@@ -85,7 +86,7 @@ int promote_assign(data_type dtype, int right_arg_pos, bool is_local = false);
 tuple<int, int> promote(int left_arg_pos, int right_arg_pos, bool is_local = false);
 
 void error(string m);
-int lookup(string s);
+int lookup(string s, bool find_function_only = false);
 int lookup_op(string s);
 int get_number(string number_name, data_type dtype);
 

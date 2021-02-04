@@ -70,8 +70,16 @@ void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 
 void print_label(int label_pos)
 {
-	cout << endl; //TODO: for debugging reasons
-	cout << symtable[label_pos].name + ":" << endl;
+	if (code_buffering)
+	{
+		callable_output_buffer += "\n";//TODO: for debugging reasons
+		callable_output_buffer += symtable[label_pos].name + ":\n";
+	}
+	else
+	{
+		cout << endl; //TODO: for debugging reasons
+		cout << symtable[label_pos].name + ":" << endl;
+	}
 }
 
 string print_symbol_content(int arg_pos, bool use_ref)

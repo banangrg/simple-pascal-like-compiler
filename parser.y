@@ -179,7 +179,16 @@ arguments : '(' parameter_list ')' {
 		for (list<int>::iterator it = list_of_params.begin(); it != list_of_params.end(); ++it)
 		{
 			allocate(*it, symtable[*it].dtype, true);
+			if (symtable[*it].type == entry_type::ARRAY)
+			{
+				symtable[$0].argtypes.emplace_back(static_cast<int>(symtable[*it].type));//put "array", doesn't mean what dtype, they aren't convertable
+			}
+			else
+			{
+				symtable[$0].argtypes.emplace_back(static_cast<int>(symtable[*it].dtype));
+			}
 		}
+		list_of_params.clear();
 	}
 	| %empty
 	;
@@ -291,23 +300,40 @@ variable : ID { /* printf("F variable1\n "); */ }
 	 }
 	;
 
-procedure_statement : ID { 
-		if (symtable[$1].type == entry_type::FUNCTION )//TODO:probably not used, check write(func(a))
-		{
-			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
-			allocate(fn_result_pos, symtable[$1].dtype);
-			list_of_expressions.emplace_back(fn_result_pos);
-		}		
+procedure_statement : ID {
+		//TODO:error if any params expected
 		emit_procedure($1, list_of_expressions);
 		list_of_expressions.clear();
  	}
 	| ID '(' expression_list ')' { 
-		if (symtable[$1].type == entry_type::FUNCTION )//TODO:probably not used
-		{
-			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
-			allocate(fn_result_pos, symtable[$1].dtype);
-			list_of_expressions.emplace_back(fn_result_pos);
-		}		
+			//TODO:check number of fn args passed
+			//TODO:check types
+			//convert types and NUMs to VARs before call
+			list<int>::iterator it1 = symtable[$1].argtypes.begin();
+			list<int>::iterator it2 = list_of_expressions.begin();
+			for (; it1 != symtable[$1].argtypes.end(); ++it1, ++it2)
+			{
+				bool expected_array = ( static_cast<entry_type>(*it1) == entry_type::ARRAY );
+				bool passed_array = ( symtable[*it2].type == entry_type::ARRAY );
+				//TODO: array not array errors, wrong dtype on array error
+				data_type expected_dtype = static_cast<data_type>(*it1);
+
+				if (expected_dtype != symtable[*it2].dtype )
+				{
+					int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
+					it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
+					it2 = list_of_expressions.insert(it2, promoted_pos);
+				}
+				else if (symtable[*it2].type == entry_type::NUMBER)
+				{
+					int fn_num_arg_pos = insert_tempvar(symtable_pointer >= 0);
+					allocate(fn_num_arg_pos, expected_dtype);
+					gencode("mov", *it2, fn_num_arg_pos);
+					it2 = list_of_expressions.erase(it2);//erase returns iterator of previous element
+					it2 = list_of_expressions.insert(it2, fn_num_arg_pos);
+				}
+			}
+
 		emit_procedure($1, list_of_expressions);
 		list_of_expressions.clear();
 	}
@@ -425,6 +451,7 @@ factor : variable {
 		$$ = $1;//left to be explicit this time
 		if (symtable[$1].type == entry_type::FUNCTION)
 		{
+			//TODO:error if any params expected
 			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
 			allocate(fn_result_pos, symtable[$1].dtype);
 			list_of_expressions.emplace_back(fn_result_pos);
@@ -434,12 +461,50 @@ factor : variable {
 		}
  	}
 	| ID '(' expression_list ')' {
-		if (symtable[$1].type == entry_type::FUNCTION)
+		int fn_pos = $1;
+		if (symtable[fn_pos].type != entry_type::FUNCTION)
 		{
+			fn_pos = lookup(symtable[fn_pos].name, true);
+		}
+		if (fn_pos == 0)
+		{
+			//TODO:error, expected function call
+		}
+
+		if (symtable[fn_pos].type == entry_type::FUNCTION)
+		{
+			//TODO:check number of fn args passed
+			//TODO:check types
+			//convert types and NUMs to VARs before call
+			list<int>::iterator it1 = symtable[fn_pos].argtypes.begin();
+			list<int>::iterator it2 = list_of_expressions.begin();
+			for (; it1 != symtable[fn_pos].argtypes.end(); ++it1, ++it2)
+			{
+				bool expected_array = ( static_cast<entry_type>(*it1) == entry_type::ARRAY );
+				bool passed_array = ( symtable[*it2].type == entry_type::ARRAY );
+				//TODO: array not array errors, wrong dtype on array error
+				data_type expected_dtype = static_cast<data_type>(*it1);
+
+				if (expected_dtype != symtable[*it2].dtype )
+				{
+					int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
+					it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
+					it2 = list_of_expressions.insert(it2, promoted_pos);
+				}
+				else if (symtable[*it2].type == entry_type::NUMBER)
+				{
+					int fn_num_arg_pos = insert_tempvar(symtable_pointer >= 0);
+					allocate(fn_num_arg_pos, expected_dtype);
+					gencode("mov", *it2, fn_num_arg_pos);
+					it2 = list_of_expressions.erase(it2);//erase returns iterator of previous element
+					it2 = list_of_expressions.insert(it2, fn_num_arg_pos);
+				}
+			}
+
 			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
-			allocate(fn_result_pos, symtable[$1].dtype);
+			allocate(fn_result_pos, symtable[fn_pos].dtype);
 			list_of_expressions.emplace_back(fn_result_pos);
-			emit_procedure($1, list_of_expressions);
+			emit_procedure(fn_pos, list_of_expressions);
 			list_of_expressions.clear();
 			$$ = fn_result_pos;
 		}
