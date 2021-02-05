@@ -1,11 +1,16 @@
 #include "global.h"
 #include "parser.hpp"
+#include <fstream>
 #include <list>
 #include <set>
 
 using std::list;
+using std::ofstream;
 using std::set;
 
+bool save_to_output;
+string output_file_name;
+ofstream outfile;
 set<entry_type> labelable_set{entry_type::LABEL, entry_type::PROGRAM_NAME, entry_type::FUNCTION, entry_type::PROCEDURE};
 
 void emit(int t, int tval)
@@ -65,13 +70,12 @@ void print_label(int label_pos)
 {
 	if (code_buffering)
 	{
-		callable_output_buffer += "\n";//TODO: for debugging reasons
 		callable_output_buffer += symtable[label_pos].name + ":\n";
 	}
 	else
 	{
 		cout << endl; //TODO: for debugging reasons
-		cout << symtable[label_pos].name + ":" << endl;
+		emit_to_output(symtable[label_pos].name + ":\n");
 	}
 }
 
@@ -143,6 +147,30 @@ void gencode(string mnem, int arg1_pos, int arg2_pos, int arg3_pos, bool arg1_by
 	}
 	else
 	{
-		cout << command << endl;
+		emit_to_output(command + "\n");
 	}
+}
+
+void open_stream()
+{
+	if (save_to_output)
+	{
+		outfile = ofstream(output_file_name);
+	}
+}
+
+void close_stream()
+{
+	if (outfile.is_open())
+	{
+		outfile.flush();
+		outfile.close();
+	}
+}
+
+void emit_to_output(string s)
+{
+	if (save_to_output)
+		outfile << s;
+	cout << s;
 }

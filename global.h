@@ -1,7 +1,7 @@
-#include <stdio.h>
+#include <stdio.h> //TODO: delete when all printf and scanf will be removed
 #include <stdlib.h>
-#include <ctype.h>
-#include <string.h>
+#include <ctype.h>//TODO: probably to be removed
+#include <string.h>//TODO: probably to be removed
 #include <iostream>
 #include <vector>
 #include <string>
@@ -78,6 +78,9 @@ extern vector<struct entry> symtable;
 extern vector<struct op_entry> optable;
 extern void emit_procedure(int fn_or_proc_pos, list<int> arg_list);
 
+extern bool save_to_output;
+extern string output_file_name;
+
 int insert(string s, int tok);
 int insert_tempvar(bool is_local = false);
 int insert_label(bool is_local = false);
@@ -106,3 +109,6 @@ void emit(int t, int tval);
 
 void gencode(string mnem, int arg1_pos = -1, int arg2_pos = -1, int arg3_pos = -1, bool arg1_by_ref = false, bool arg2_by_ref = false, bool arg3_by_ref = false);
 void print_label(int label_pos);
+void open_stream();
+void close_stream();
+void emit_to_output(string);

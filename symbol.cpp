@@ -51,7 +51,7 @@ int insert_tempvar(bool is_local)
 
 int insert_label(bool is_local)
 {
-	string s = "$lab" + to_string(lastcondition++);
+	string s = "lab" + to_string(lastcondition++);
 	int label_pos = insert(s, ID);
 	symtable[label_pos].type = entry_type::LABEL;
 	symtable[label_pos].is_local = is_local;

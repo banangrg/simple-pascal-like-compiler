@@ -126,7 +126,7 @@ subprogram_declaration : {
 		}
 		int enter_pos = get_number(to_string(enter_bytes), data_type::INTEGER);
 		gencode(string("enter"), enter_pos);
-		cout<<callable_output_buffer;//buffered statements from compound statement
+		emit_to_output(callable_output_buffer);//buffered statements from compound statement
 		gencode(string("leave"));
 		gencode(string("return"));
 
@@ -267,7 +267,7 @@ statement : variable ASSIGNOP expression {
 	} expression {
 		int after_loop_pos = insert_label(symtable_pointer >= 0);
 		int zero_pos = get_number(string("0"), data_type::INTEGER);
-		gencode(string("jeq"), zero_pos, $3, after_loop_pos);
+		gencode(string("je"), zero_pos, $3, after_loop_pos);
 		$2 = after_loop_pos;
 	} KW_DO statement {
 		gencode(string("jump"), $1);
@@ -341,7 +341,7 @@ procedure_statement : ID {
 				error(err_msg); 
 			}
 
-			if (expected_dtype != symtable[*it2].dtype )
+			if (!passed_array && (expected_dtype != symtable[*it2].dtype))
 			{
 				int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
 				it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
@@ -522,7 +522,7 @@ factor : variable {
 				err_msg += "an array was expected.";
 				error(err_msg); 
 			}
-			if (expected_dtype != symtable[*it2].dtype )
+			if (!passed_array && (expected_dtype != symtable[*it2].dtype))
 			{
 				int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
 				it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
@@ -562,12 +562,13 @@ factor : variable {
 
 void parse(){
 	int parsing_result = yyparse();
+	close_stream();
 	switch (parsing_result) {
 		case 0:
 			cout<<"Parsing successful!"<<endl;
 			break;
 		case 1:
-			cout<<"Parsing failed! Syntax error. Line:"<<lineno<<endl;
+			cout<<"Parsing failed! Syntax error."<<lineno<<endl;
 			break;
 		case 2:
 			cout<<"Parsing failed! Out of memory."<<endl;
@@ -575,5 +576,5 @@ void parse(){
 }
 
 void yyerror(char const *s){
-	fprintf (stderr, "%s\n", s);
+	std::cerr<<"Line "<<to_string(lineno)<<": "<<s<<endl;
 }

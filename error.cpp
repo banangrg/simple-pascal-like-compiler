@@ -5,6 +5,7 @@ using std::endl;
 
 void error(string m)
 {
-	std::cerr<<"line "<<lineno<<" : "<<m<<endl;
+	std::cerr<<"Line "<<lineno<<" : "<<m<<endl;
+	close_stream();
 	exit(1);
 }
