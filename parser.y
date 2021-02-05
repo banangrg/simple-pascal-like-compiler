@@ -277,10 +277,13 @@ statement : variable ASSIGNOP expression {
 
 variable : ID { /* printf("F variable1\n "); */ }
 	| ID '[' expression ']' {
+		if (symtable[$1].type != entry_type::ARRAY)
+		{
+			error("Trying to access array element but " + symtable[$1].name + " is not an array");
+		}
 		if (symtable[$3].dtype != data_type::INTEGER)
 		{
-			//TODO:error, only integer indices
-			// plus not an array error etc.
+			error("Array-index expression must be an integer");
 		}
 		int start_index_pos = get_number(to_string(symtable[$1].ainfo.start_index), data_type::INTEGER);
 		int array_index_pos = insert_tempvar(symtable_pointer >= 0);
@@ -307,7 +310,7 @@ variable : ID { /* printf("F variable1\n "); */ }
 
 procedure_statement : ID {
 		callable_type = "Procedure ";
-		//TODO: args expected for read/write
+		if (((symtable[$1].name) == "read") || ((symtable[$1].name) == "write")) error("Procedure " + symtable[$1].name + " expects an argument to be passed");
 		if (symtable[$1].argtypes.size() > 0) error (callable_type + symtable[$1].name + " called without arguments, while " + to_string(symtable[$1].argtypes.size()) + " arguments expected");
 		emit_procedure($1, list_of_expressions);
 		list_of_expressions.clear();
@@ -432,36 +435,40 @@ simple_expression : term
 		$$ = temp_pos;
 	}
 	| simple_expression OR term {
-		tuple<int,int> operands_pos = promote($1, $3, symtable_pointer >= 0);
+		$1 = promote_assign(data_type::INTEGER, $1, symtable_pointer >= 0);//OR can be used only with integers
+		$3 = promote_assign(data_type::INTEGER, $3, symtable_pointer >= 0);
 		int temp_pos = insert_tempvar(symtable_pointer >= 0);
-		allocate(temp_pos, data_type::INTEGER);//TODO:convert to int operands
-		gencode("or", std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
+		allocate(temp_pos, data_type::INTEGER);
+		gencode("or", $1, $3, temp_pos);
 		$$ = temp_pos;
 	}
 	;
 	
 term : factor
 	| term MULOP factor {
-		tuple<int,int> operands_pos = promote($1, $3, symtable_pointer >= 0);
-		data_type op_result_dtype = symtable[std::get<0>(operands_pos)].dtype;
-
 		string command;
 		switch (optable[$2].shortcut)
 		{
 			case 1: command = "mul";
 				break;
-			case 2: command = "div";
+			case 2: command = "div";//float division
 				break;
-			case 3: command = "div";//TODO:conversion to int
+			case 3: command = "div";//real integer div
+				$1 = promote_assign(data_type::INTEGER, $1, symtable_pointer >= 0);
+				$3 = promote_assign(data_type::INTEGER, $3, symtable_pointer >= 0);
 				break;
 			case 4: command = "mod";
+				$1 = promote_assign(data_type::INTEGER, $1, symtable_pointer >= 0);
+				$3 = promote_assign(data_type::INTEGER, $3, symtable_pointer >= 0);
 				break;
 			default: command = "and";
-				op_result_dtype = data_type::INTEGER;//TODO:conversion to int
+				$1 = promote_assign(data_type::INTEGER, $1, symtable_pointer >= 0);
+				$3 = promote_assign(data_type::INTEGER, $3, symtable_pointer >= 0);
 		}
 
+		tuple<int,int> operands_pos = promote($1, $3, symtable_pointer >= 0);
 		int temp_pos = insert_tempvar(symtable_pointer >= 0);
-		allocate(temp_pos, op_result_dtype);
+		allocate(temp_pos, symtable[std::get<0>(operands_pos)].dtype);
 
 		gencode(command, std::get<0>(operands_pos), std::get<1>(operands_pos), temp_pos);
 		$$ = temp_pos;
@@ -495,7 +502,7 @@ factor : variable {
 		}
 
 		string callable_type = "Function ";
-		if (symtable[$1].argtypes.size() != list_of_expressions.size())	error (callable_type + symtable[$1].name + " called with " + to_string(list_of_expressions.size()) + " arguments, while " + to_string(symtable[$1].argtypes.size()) + " arguments expected");
+		if (symtable[fn_pos].argtypes.size() != list_of_expressions.size())	error (callable_type + symtable[fn_pos].name + " called with " + to_string(list_of_expressions.size()) + " arguments, while " + to_string(symtable[fn_pos].argtypes.size()) + " arguments expected");
 		list<int>::iterator it1 = symtable[fn_pos].argtypes.begin();
 		list<int>::iterator it2 = list_of_expressions.begin();
 		int argcounter = 1;
