@@ -230,15 +230,15 @@ parameter_list : identifier_list ':' type {
 	}
 	;
 
-compound_statement : { /* printf("S cm_stmt\n "); */ } KW_BEGIN optional_statements KW_END { /* printf("F cm_stmt\n "); */ }
+compound_statement : KW_BEGIN optional_statements KW_END
 	;
 
-optional_statements : { /* printf("S opt_stmt1\n "); */ } statement_list { /* printf("F opt_stmt1\n "); */ }
-	| %empty { /* printf("S+F opt_stmt2\n "); */ }
+optional_statements : statement_list
+	| %empty
 	;
 
-statement_list : { /* printf("S stmt_list1\n "); */ } statement { /* printf("F stmt_list1\n "); */ }
-	| statement_list ';' { /* printf("M stmt_list2\n "); */ } statement { /* printf("F stmt_list2\n "); */ }
+statement_list : statement
+	| statement_list ';' statement
 	;
 
 statement : variable ASSIGNOP expression { 
@@ -250,7 +250,7 @@ statement : variable ASSIGNOP expression {
 	| KW_IF expression {
 		int zero_pos = get_number(string("0"), data_type::INTEGER);
 		int else_pos = insert_label(symtable_pointer >= 0);
-		gencode(string("jne"), zero_pos, $2, else_pos);
+		gencode(string("je"), zero_pos, $2, else_pos);
 		$1 = else_pos;
 	} KW_THEN statement {
 		int endif_pos = insert_label(symtable_pointer >= 0);
@@ -275,7 +275,7 @@ statement : variable ASSIGNOP expression {
 	}
 	;
 
-variable : ID { /* printf("F variable1\n "); */ }
+variable : ID
 	| ID '[' expression ']' {
 		if (symtable[$1].type != entry_type::ARRAY)
 		{
@@ -344,7 +344,7 @@ procedure_statement : ID {
 			if (!passed_array && (expected_dtype != symtable[*it2].dtype))
 			{
 				int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
-				it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
+				it2 = list_of_expressions.erase(it2);
 				it2 = list_of_expressions.insert(it2, promoted_pos);
 			}
 			else if (symtable[*it2].type == entry_type::NUMBER)
@@ -352,7 +352,7 @@ procedure_statement : ID {
 				int fn_num_arg_pos = insert_tempvar(symtable_pointer >= 0);
 				allocate(fn_num_arg_pos, expected_dtype);
 				gencode("mov", *it2, fn_num_arg_pos);
-				it2 = list_of_expressions.erase(it2);//erase returns iterator of previous element
+				it2 = list_of_expressions.erase(it2);
 				it2 = list_of_expressions.insert(it2, fn_num_arg_pos);
 			}
 			argcounter++;

@@ -51,8 +51,10 @@ void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 {
 	if ((symtable[fn_or_proc_pos].name == "write") || (symtable[fn_or_proc_pos].name == "read"))
 	{
-		int io_arg_pos = *arg_list.begin();
-		gencode(symtable[fn_or_proc_pos].name, io_arg_pos);
+		for (list<int>::iterator it = arg_list.begin(); it != arg_list.end(); ++it)
+		{
+			gencode(symtable[fn_or_proc_pos].name, *it);
+		}
 		return;
 	}
 
@@ -74,7 +76,7 @@ void print_label(int label_pos)
 	}
 	else
 	{
-		cout << endl; //TODO: for debugging reasons
+		cout << endl;
 		emit_to_output(symtable[label_pos].name + ":\n");
 	}
 }
