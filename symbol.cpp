@@ -115,7 +115,7 @@ int promote_assign(data_type left_dtype, int right_arg_pos, bool is_local)
 	}
 	else
 	{
-		//TODO: error
+		error("Unable to convert " + symtable[right_arg_pos].name + " into " + decode_dtype(left_dtype));
 		return -1;
 	}
 }
@@ -126,14 +126,14 @@ tuple<int, int> promote(int first_arg_pos, int second_arg_pos, bool is_local)
 	{
 		return std::make_tuple(first_arg_pos, second_arg_pos);
 	}
-	else if (symtable[first_arg_pos].dtype == data_type::REAL)
+	else if ((symtable[first_arg_pos].dtype == data_type::REAL) && (symtable[second_arg_pos].dtype == data_type::INTEGER))
 	{
 		int temp_pos = insert_tempvar(is_local);
 		allocate(temp_pos, data_type::REAL);
 		gencode(string("inttoreal"), second_arg_pos, temp_pos);
 		return std::make_tuple(first_arg_pos, temp_pos);
 	}
-	else if (symtable[second_arg_pos].dtype == data_type::REAL)
+	else if ((symtable[second_arg_pos].dtype == data_type::REAL) && (symtable[first_arg_pos].dtype == data_type::INTEGER))
 	{
 		int temp_pos = insert_tempvar(is_local);
 		allocate(temp_pos, data_type::REAL);
@@ -142,7 +142,7 @@ tuple<int, int> promote(int first_arg_pos, int second_arg_pos, bool is_local)
 	}
 	else
 	{
-		//TODO:error
+		error("Unable to convert " + symtable[first_arg_pos].name + " or " + symtable[second_arg_pos].name);
 		return std::make_tuple(-1, -1);
 	}
 }
@@ -207,7 +207,7 @@ string decode_dtype(data_type dtype)
 	switch (dtype)
 	{
 	case data_type::INTEGER:
-		return "INT";
+		return "INTEGER";
 	case data_type::REAL:
 		return "REAL";
 	}

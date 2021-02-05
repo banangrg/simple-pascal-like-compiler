@@ -91,6 +91,8 @@ int lookup_op(string s);
 int get_number(string number_name, data_type dtype);
 
 void allocate(int pos, data_type dtype, bool is_pointer = false);
+string decode_type(entry_type type);
+string decode_dtype(data_type dtype);
 void dump(int lower_index = 0);
 void init();
 void parse();

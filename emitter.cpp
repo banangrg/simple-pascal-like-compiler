@@ -44,28 +44,21 @@ void emit(int t, int tval)
 
 void emit_procedure(int fn_or_proc_pos, list<int> arg_list)
 {
-	if (symtable[fn_or_proc_pos].type == entry_type::FUNCTION || symtable[fn_or_proc_pos].type == entry_type::PROCEDURE)
+	if ((symtable[fn_or_proc_pos].name == "write") || (symtable[fn_or_proc_pos].name == "read"))
 	{
-		if ((symtable[fn_or_proc_pos].name == "write") || (symtable[fn_or_proc_pos].name == "read"))
-		{
-			int io_arg_pos = *arg_list.begin();
-			gencode(symtable[fn_or_proc_pos].name, io_arg_pos);
-			return;
-		}
-
-		for (list<int>::iterator it = arg_list.begin(); it != arg_list.end(); ++it)
-		{
-			gencode(string("push"), *it, -1, -1, true, false, false);
-		}
-		gencode(string("call"), fn_or_proc_pos);
-
-		int size_of_ptrs_pos = get_number(to_string(arg_list.size() * 4), data_type::INTEGER);
-		gencode(string("incsp"), size_of_ptrs_pos);
+		int io_arg_pos = *arg_list.begin();
+		gencode(symtable[fn_or_proc_pos].name, io_arg_pos);
+		return;
 	}
-	else
+
+	for (list<int>::iterator it = arg_list.begin(); it != arg_list.end(); ++it)
 	{
-		//TODO:error;
+		gencode(string("push"), *it, -1, -1, true, false, false);
 	}
+	gencode(string("call"), fn_or_proc_pos);
+
+	int size_of_ptrs_pos = get_number(to_string(arg_list.size() * 4), data_type::INTEGER);
+	gencode(string("incsp"), size_of_ptrs_pos);
 }
 
 void print_label(int label_pos)
@@ -108,7 +101,7 @@ string print_symbol_content(int arg_pos, bool use_ref)
 		}
 		return offset_prefix + to_string(symbol.offset);
 	}
-	//TODO:error
+	error("Incorrect usage of " + symbol.name);
 	return "";
 }
 

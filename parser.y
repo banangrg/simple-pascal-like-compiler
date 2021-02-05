@@ -6,6 +6,9 @@
 
 	data_type temp_data_type;
 	array_info temp_array_info;
+	
+	string callable_type;
+	
 	bool code_buffering = false;
 	string callable_output_buffer = "";
 	int symtable_pointer = -1;
@@ -47,7 +50,7 @@
 %token T_ARRAY
 %%
 
-program : KW_PROGRAM ID '(' identifier_list ')' ';' { 
+program  : KW_PROGRAM ID '(' identifier_list ')' ';' { 
 		symtable[$2].type = entry_type::PROGRAM_NAME;
 		list_of_ids.clear(); 
 	}
@@ -87,7 +90,9 @@ type : standard_type {
 		temp_array_info = {};
 	}
 	| KW_ARRAY '[' NUM '.''.' NUM ']' KW_OF standard_type { 
-		//TODO: error if not integer index or idx < 0; another error is 2nd num is less than 1st one
+		if ((symtable[$3].dtype != data_type::INTEGER) || (symtable[$6].dtype != data_type::INTEGER)) error("Array range must be defined using integers.");
+		if (stoi(symtable[$3].name) > stoi(symtable[$6].name)) error("Array start index cannot be lower than end index");
+
 		temp_data_type = static_cast<data_type>($9);
 		temp_array_info.start_index = atoi(symtable[$3].name.c_str());
 		temp_array_info.end_index = atoi(symtable[$6].name.c_str());
@@ -261,7 +266,7 @@ statement : variable ASSIGNOP expression {
 		$1 = loop_start_pos;
 	} expression {
 		int after_loop_pos = insert_label(symtable_pointer >= 0);
-		int zero_pos = get_number(string("0"), data_type::INTEGER);//TODO: consider promotion then selection of data type
+		int zero_pos = get_number(string("0"), data_type::INTEGER);
 		gencode(string("jeq"), zero_pos, $3, after_loop_pos);
 		$2 = after_loop_pos;
 	} KW_DO statement {
@@ -274,7 +279,7 @@ variable : ID { /* printf("F variable1\n "); */ }
 	| ID '[' expression ']' {
 		if (symtable[$3].dtype != data_type::INTEGER)
 		{
-			//error, only integer indices
+			//TODO:error, only integer indices
 			// plus not an array error etc.
 		}
 		int start_index_pos = get_number(to_string(symtable[$1].ainfo.start_index), data_type::INTEGER);
@@ -301,38 +306,54 @@ variable : ID { /* printf("F variable1\n "); */ }
 	;
 
 procedure_statement : ID {
-		//TODO:error if any params expected
+		callable_type = "Procedure ";
+		//TODO: args expected for read/write
+		if (symtable[$1].argtypes.size() > 0) error (callable_type + symtable[$1].name + " called without arguments, while " + to_string(symtable[$1].argtypes.size()) + " arguments expected");
 		emit_procedure($1, list_of_expressions);
 		list_of_expressions.clear();
  	}
-	| ID '(' expression_list ')' { 
-			//TODO:check number of fn args passed
-			//TODO:check types
-			//convert types and NUMs to VARs before call
-			list<int>::iterator it1 = symtable[$1].argtypes.begin();
-			list<int>::iterator it2 = list_of_expressions.begin();
-			for (; it1 != symtable[$1].argtypes.end(); ++it1, ++it2)
-			{
-				bool expected_array = ( static_cast<entry_type>(*it1) == entry_type::ARRAY );
-				bool passed_array = ( symtable[*it2].type == entry_type::ARRAY );
-				//TODO: array not array errors, wrong dtype on array error
-				data_type expected_dtype = static_cast<data_type>(*it1);
+	| ID '(' expression_list ')' {
+		callable_type = "Procedure ";
+		if (((symtable[$1].name) != "read") && ((symtable[$1].name) != "write") && (symtable[$1].argtypes.size() != list_of_expressions.size()))
+		{
+			error (callable_type + symtable[$1].name + " called with " + to_string(list_of_expressions.size()) + " arguments, while " + to_string(symtable[$1].argtypes.size()) + " arguments expected");
+		}
+		list<int>::iterator it1 = symtable[$1].argtypes.begin();
+		list<int>::iterator it2 = list_of_expressions.begin();
+		int argcounter = 1;
+		//convert types and NUMs to VARs before call
+		for (; it1 != symtable[$1].argtypes.end(); ++it1, ++it2)
+		{
+			bool expected_array = ( static_cast<entry_type>(*it1) == entry_type::ARRAY );
+			bool passed_array = ( symtable[*it2].type == entry_type::ARRAY );
+			//TODO: wrong dtype on array error
+			data_type expected_dtype = static_cast<data_type>(*it1);
 
-				if (expected_dtype != symtable[*it2].dtype )
-				{
-					int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
-					it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
-					it2 = list_of_expressions.insert(it2, promoted_pos);
-				}
-				else if (symtable[*it2].type == entry_type::NUMBER)
-				{
-					int fn_num_arg_pos = insert_tempvar(symtable_pointer >= 0);
-					allocate(fn_num_arg_pos, expected_dtype);
-					gencode("mov", *it2, fn_num_arg_pos);
-					it2 = list_of_expressions.erase(it2);//erase returns iterator of previous element
-					it2 = list_of_expressions.insert(it2, fn_num_arg_pos);
-				}
+			if (passed_array != expected_array) {
+				string err_msg = callable_type + symtable[$1].name + ", passed argument " + to_string(argcounter) + " is ";
+				if (!passed_array) err_msg += "not ";
+				err_msg += "an array, while ";
+				if (!expected_array) err_msg += "not ";
+				err_msg += "an array was expected.";
+				error(err_msg); 
 			}
+
+			if (expected_dtype != symtable[*it2].dtype )
+			{
+				int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
+				it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
+				it2 = list_of_expressions.insert(it2, promoted_pos);
+			}
+			else if (symtable[*it2].type == entry_type::NUMBER)
+			{
+				int fn_num_arg_pos = insert_tempvar(symtable_pointer >= 0);
+				allocate(fn_num_arg_pos, expected_dtype);
+				gencode("mov", *it2, fn_num_arg_pos);
+				it2 = list_of_expressions.erase(it2);//erase returns iterator of previous element
+				it2 = list_of_expressions.insert(it2, fn_num_arg_pos);
+			}
+			argcounter++;
+		}
 
 		emit_procedure($1, list_of_expressions);
 		list_of_expressions.clear();
@@ -451,7 +472,8 @@ factor : variable {
 		$$ = $1;//left to be explicit this time
 		if (symtable[$1].type == entry_type::FUNCTION)
 		{
-			//TODO:error if any params expected
+			callable_type = "Function ";
+			if (symtable[$1].argtypes.size() > 0) error (callable_type + symtable[$1].name + " called without arguments, while " + to_string(symtable[$1].argtypes.size()) + " arguments expected");
 			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
 			allocate(fn_result_pos, symtable[$1].dtype);
 			list_of_expressions.emplace_back(fn_result_pos);
@@ -461,6 +483,7 @@ factor : variable {
 		}
  	}
 	| ID '(' expression_list ')' {
+		callable_type = "Function ";
 		int fn_pos = $1;
 		if (symtable[fn_pos].type != entry_type::FUNCTION)
 		{
@@ -468,50 +491,53 @@ factor : variable {
 		}
 		if (fn_pos == 0)
 		{
-			//TODO:error, expected function call
+			error(callable_type + " declaration of " + symtable[$1].name + " not found. Are you sure you declared it?");
 		}
 
-		if (symtable[fn_pos].type == entry_type::FUNCTION)
+		string callable_type = "Function ";
+		if (symtable[$1].argtypes.size() != list_of_expressions.size())	error (callable_type + symtable[$1].name + " called with " + to_string(list_of_expressions.size()) + " arguments, while " + to_string(symtable[$1].argtypes.size()) + " arguments expected");
+		list<int>::iterator it1 = symtable[fn_pos].argtypes.begin();
+		list<int>::iterator it2 = list_of_expressions.begin();
+		int argcounter = 1;
+		//convert types and NUMs to VARs before call
+		for (; it1 != symtable[fn_pos].argtypes.end(); ++it1, ++it2)
 		{
-			//TODO:check number of fn args passed
-			//TODO:check types
-			//convert types and NUMs to VARs before call
-			list<int>::iterator it1 = symtable[fn_pos].argtypes.begin();
-			list<int>::iterator it2 = list_of_expressions.begin();
-			for (; it1 != symtable[fn_pos].argtypes.end(); ++it1, ++it2)
-			{
-				bool expected_array = ( static_cast<entry_type>(*it1) == entry_type::ARRAY );
-				bool passed_array = ( symtable[*it2].type == entry_type::ARRAY );
-				//TODO: array not array errors, wrong dtype on array error
-				data_type expected_dtype = static_cast<data_type>(*it1);
+			bool expected_array = ( static_cast<entry_type>(*it1) == entry_type::ARRAY );
+			bool passed_array = ( symtable[*it2].type == entry_type::ARRAY );
+			//TODO: wrong dtype on array error
+			data_type expected_dtype = static_cast<data_type>(*it1);
 
-				if (expected_dtype != symtable[*it2].dtype )
-				{
-					int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
-					it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
-					it2 = list_of_expressions.insert(it2, promoted_pos);
-				}
-				else if (symtable[*it2].type == entry_type::NUMBER)
-				{
-					int fn_num_arg_pos = insert_tempvar(symtable_pointer >= 0);
-					allocate(fn_num_arg_pos, expected_dtype);
-					gencode("mov", *it2, fn_num_arg_pos);
-					it2 = list_of_expressions.erase(it2);//erase returns iterator of previous element
-					it2 = list_of_expressions.insert(it2, fn_num_arg_pos);
-				}
+			if (passed_array != expected_array) {
+				string err_msg = callable_type + symtable[$1].name + ", passed argument " + to_string(argcounter) + " is ";
+				if (!passed_array) err_msg += "not ";
+				err_msg += "an array, while ";
+				if (!expected_array) err_msg += "not ";
+				err_msg += "an array was expected.";
+				error(err_msg); 
 			}
+			if (expected_dtype != symtable[*it2].dtype )
+			{
+				int promoted_pos = promote_assign(expected_dtype, *it2, symtable_pointer >= 0);
+				it2 = list_of_expressions.erase(it2);//erase method returns iterator of previous element
+				it2 = list_of_expressions.insert(it2, promoted_pos);
+			}
+			else if (symtable[*it2].type == entry_type::NUMBER)
+			{
+				int fn_num_arg_pos = insert_tempvar(symtable_pointer >= 0);
+				allocate(fn_num_arg_pos, expected_dtype);
+				gencode("mov", *it2, fn_num_arg_pos);
+				it2 = list_of_expressions.erase(it2);//erase returns iterator of previous element
+				it2 = list_of_expressions.insert(it2, fn_num_arg_pos);
+			}
+			argcounter++;
+		}
 
-			int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
-			allocate(fn_result_pos, symtable[fn_pos].dtype);
-			list_of_expressions.emplace_back(fn_result_pos);
-			emit_procedure(fn_pos, list_of_expressions);
-			list_of_expressions.clear();
-			$$ = fn_result_pos;
-		}
-		else
-		{
-			//TODO:error
-		}
+		int fn_result_pos = insert_tempvar(symtable_pointer >= 0);
+		allocate(fn_result_pos, symtable[fn_pos].dtype);
+		list_of_expressions.emplace_back(fn_result_pos);
+		emit_procedure(fn_pos, list_of_expressions);
+		list_of_expressions.clear();
+		$$ = fn_result_pos;
 	}
 	| NUM
 	| '(' expression ')' {
@@ -531,13 +557,13 @@ void parse(){
 	int parsing_result = yyparse();
 	switch (parsing_result) {
 		case 0:
-			printf("Parsing successful!");
+			cout<<"Parsing successful!"<<endl;
 			break;
 		case 1:
-			printf("Parsing failed! Syntax error.");
+			cout<<"Parsing failed! Syntax error. Line:"<<lineno<<endl;
 			break;
 		case 2:
-			printf("Parsing failed! Out of memory.");
+			cout<<"Parsing failed! Out of memory."<<endl;
 	}
 }
 

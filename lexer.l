@@ -20,7 +20,8 @@ letter      [A-Za-z]
 digit       [0-9]
 id          {letter}({letter}|{digit})*
 number      {digit}+
-fnumber     {digit}+([.]{digit}+)?
+opt_exp		([+|-])?{number}
+fnumber     {number}+([.]{number}+)?{opt_exp}?
 relop		<>|<=|>=|=|<|>
 
 %%
